@@ -1,7 +1,12 @@
 <?php
 /**
- * Monthly snapshot: once per calendar month, write each post's current rolling
- * view total into a permanent history table.
+ * Monthly snapshot: on the first daily cron run of a new calendar month,
+ * write each post's 3-month calendar-aligned view total for the month that
+ * just ended into the permanent history table.
+ *
+ * Snapshot date key: 2026-06-01
+ * Written:           first cron run on or after 2026-07-01
+ * Window:            2026-04-01 – 2026-06-30  (3 full calendar months)
  *
  * @package RecentPostPopularity
  */
@@ -16,27 +21,37 @@ if ( ! defined( 'ABSPATH' ) ) {
 class RPP_Snapshotter {
 
 	/**
-	 * Write a monthly snapshot if one has not yet been recorded for the current
-	 * calendar month.
+	 * Write a snapshot for the previous calendar month if one has not yet been
+	 * recorded. Self-contained: uses its own calendar-aligned window query so
+	 * the result matches the historical import convention exactly.
 	 *
-	 * Idempotent: the PRIMARY KEY (post_id, snapshot_month) prevents duplicates
-	 * even if called multiple times in the same month.
+	 * Idempotent: PRIMARY KEY (post_id, snapshot_month) + INSERT IGNORE prevent
+	 * duplicates even if called multiple times after month rollover.
 	 *
-	 * @param array $sums     Map of post_id => rolling view count (posts with hits > 0).
-	 * @param array $existing Flat list of post_ids that carry the 'views' meta (includes zeros).
 	 * @return void
 	 */
-	public static function maybe_snapshot( array $sums, array $existing ) {
+	public static function maybe_snapshot() {
 		global $wpdb;
 
 		$snapshot_table = $wpdb->prefix . RPP_SNAPSHOT_TABLE;
-		$month          = gmdate( 'Y-m-01', current_time( 'timestamp' ) );
+		$hits_table     = $wpdb->prefix . RPP_TABLE;
+		$now            = current_time( 'timestamp' );
 
-		// Cheap check: has any snapshot been written for this month already?
+		// Target: the month that just ended.
+		// e.g. if today is anywhere in July 2026, snapshot_month = 2026-06-01.
+		$first_of_current_month = gmdate( 'Y-m-01', $now );
+		$snapshot_month         = gmdate( 'Y-m-01', strtotime( $first_of_current_month . ' -1 month' ) );
+
+		// Calendar window: 3 full months ending on the last day of snapshot_month.
+		// e.g. snapshot_month = 2026-06-01 → window 2026-04-01 to 2026-06-30.
+		$window_start = gmdate( 'Y-m-01', strtotime( $snapshot_month . ' -2 months' ) );
+		$window_end   = gmdate( 'Y-m-d', strtotime( $first_of_current_month . ' -1 day' ) );
+
+		// Idempotency check: already snapshotted this month?
 		$already_done = (int) $wpdb->get_var(
 			$wpdb->prepare(
 				"SELECT COUNT(*) FROM {$snapshot_table} WHERE snapshot_month = %s LIMIT 1",
-				$month
+				$snapshot_month
 			)
 		);
 
@@ -44,28 +59,55 @@ class RPP_Snapshotter {
 			return;
 		}
 
-		// Build the full post_id => views map, including zeros for posts that
-		// have the meta but no hits in the current window.
-		$all_views = $sums; // already int => int.
-		foreach ( $existing as $pid ) {
-			$pid = (int) $pid;
-			if ( ! isset( $all_views[ $pid ] ) ) {
-				$all_views[ $pid ] = 0;
+		// Query the hits table for the calendar-aligned 3-month window.
+		$rows = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT post_id, SUM(hits) AS views
+				 FROM {$hits_table}
+				 WHERE day >= %s AND day <= %s
+				 GROUP BY post_id",
+				$window_start,
+				$window_end
+			),
+			ARRAY_A
+		);
+
+		$sums = array();
+		if ( $rows ) {
+			foreach ( $rows as $row ) {
+				$sums[ (int) $row['post_id'] ] = (int) $row['views'];
 			}
 		}
 
-		if ( empty( $all_views ) ) {
+		// Zero-pad all tracked posts that had no hits in the window.
+		$existing = $wpdb->get_col(
+			$wpdb->prepare(
+				"SELECT post_id FROM {$wpdb->postmeta} WHERE meta_key = %s",
+				RPP_META_KEY
+			)
+		);
+		foreach ( $existing as $pid ) {
+			$pid = (int) $pid;
+			if ( ! isset( $sums[ $pid ] ) ) {
+				$sums[ $pid ] = 0;
+			}
+		}
+
+		if ( empty( $sums ) ) {
 			return;
 		}
 
-		// Bulk-insert via a single VALUES list for efficiency.
-		// INSERT IGNORE so a re-run never overwrites an existing month's data.
+		// post_id = 0 holds the site-wide total for the month.
+		$sums[0] = array_sum( $sums );
+
+		// Bulk-insert via a single VALUES list.
+		// INSERT IGNORE: PRIMARY KEY prevents any accidental overwrites.
 		$placeholders = array();
 		$values       = array();
-		foreach ( $all_views as $post_id => $views ) {
+		foreach ( $sums as $post_id => $views ) {
 			$placeholders[] = '(%d, %s, %d)';
 			$values[]       = $post_id;
-			$values[]       = $month;
+			$values[]       = $snapshot_month;
 			$values[]       = $views;
 		}
 
