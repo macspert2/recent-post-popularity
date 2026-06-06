@@ -33,6 +33,7 @@ define( 'RPP_POST_TYPES', array( 'post' ) ); // Which post types are counted/ran
 define( 'RPP_REST_NS', 'rpp/v1' );
 define( 'RPP_CRON_HOOK', 'rpp_daily_event' );
 define( 'RPP_VERSION_OPTION', 'rpp_version' );
+define( 'RPP_SNAPSHOT_TABLE', 'rpp_monthly_snapshots' );
 
 define( 'RPP_PLUGIN_FILE', __FILE__ );
 define( 'RPP_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
@@ -47,6 +48,7 @@ require_once RPP_PLUGIN_DIR . 'includes/class-rpp-activator.php';
 require_once RPP_PLUGIN_DIR . 'includes/class-rpp-deactivator.php';
 require_once RPP_PLUGIN_DIR . 'includes/class-rpp-counter.php';
 require_once RPP_PLUGIN_DIR . 'includes/class-rpp-aggregator.php';
+require_once RPP_PLUGIN_DIR . 'includes/class-rpp-snapshotter.php';
 
 /*
  * ---------------------------------------------------------------------------

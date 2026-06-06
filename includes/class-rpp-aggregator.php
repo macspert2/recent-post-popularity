@@ -76,5 +76,8 @@ class RPP_Aggregator {
 				update_post_meta( $pid, RPP_META_KEY, 0 );
 			}
 		}
+
+		// 4. Monthly snapshot — write once per calendar month if not yet recorded.
+		RPP_Snapshotter::maybe_snapshot( $sums, $existing );
 	}
 }

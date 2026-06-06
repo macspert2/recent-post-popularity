@@ -20,7 +20,7 @@ class RPP_Activator {
 	 * @return void
 	 */
 	public static function activate() {
-		self::create_table();
+		self::create_tables();
 		self::schedule_cron();
 		self::seed_meta();
 
@@ -28,28 +28,35 @@ class RPP_Activator {
 	}
 
 	/**
-	 * Create the per-day hits table with dbDelta().
+	 * Create the per-day hits table and the monthly snapshots table with dbDelta().
 	 *
 	 * @return void
 	 */
-	private static function create_table() {
+	private static function create_tables() {
 		global $wpdb;
 
 		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
 
-		$table           = $wpdb->prefix . RPP_TABLE;
 		$charset_collate = $wpdb->get_charset_collate();
 
 		// dbDelta is picky about formatting: two spaces after PRIMARY KEY, etc.
-		$sql = "CREATE TABLE {$table} (
+		$hits_table = $wpdb->prefix . RPP_TABLE;
+		dbDelta( "CREATE TABLE {$hits_table} (
 			post_id BIGINT(20) UNSIGNED NOT NULL,
 			day DATE NOT NULL,
 			hits INT UNSIGNED NOT NULL DEFAULT 0,
 			PRIMARY KEY  (post_id, day),
 			KEY day (day)
-		) {$charset_collate};";
+		) {$charset_collate};" );
 
-		dbDelta( $sql );
+		$snapshot_table = $wpdb->prefix . RPP_SNAPSHOT_TABLE;
+		dbDelta( "CREATE TABLE {$snapshot_table} (
+			post_id BIGINT(20) UNSIGNED NOT NULL,
+			snapshot_month DATE NOT NULL,
+			views INT UNSIGNED NOT NULL DEFAULT 0,
+			PRIMARY KEY  (post_id, snapshot_month),
+			KEY snapshot_month (snapshot_month)
+		) {$charset_collate};" );
 	}
 
 	/**
