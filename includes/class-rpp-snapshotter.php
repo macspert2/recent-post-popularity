@@ -1,12 +1,12 @@
 <?php
 /**
  * Monthly snapshot: on the first daily cron run of a new calendar month,
- * write each post's 3-month calendar-aligned view total for the month that
- * just ended into the permanent history table.
+ * write each post's calendar-month view total for the month that just ended
+ * into the permanent history table.
  *
  * Snapshot date key: 2026-06-01
  * Written:           first cron run on or after 2026-07-01
- * Window:            2026-04-01 – 2026-06-30  (3 full calendar months)
+ * Window:            2026-06-01 – 2026-06-30  (1 full calendar month)
  *
  * @package RecentPostPopularity
  */
@@ -42,9 +42,9 @@ class RPP_Snapshotter {
 		$first_of_current_month = gmdate( 'Y-m-01', $now );
 		$snapshot_month         = gmdate( 'Y-m-01', strtotime( $first_of_current_month . ' -1 month' ) );
 
-		// Calendar window: 3 full months ending on the last day of snapshot_month.
-		// e.g. snapshot_month = 2026-06-01 → window 2026-04-01 to 2026-06-30.
-		$window_start = gmdate( 'Y-m-01', strtotime( $snapshot_month . ' -2 months' ) );
+		// Calendar window: the single full month that just ended.
+		// e.g. snapshot_month = 2026-06-01 → window 2026-06-01 to 2026-06-30.
+		$window_start = $snapshot_month;
 		$window_end   = gmdate( 'Y-m-d', strtotime( $first_of_current_month . ' -1 day' ) );
 
 		// Idempotency check: already snapshotted this month?
@@ -59,7 +59,7 @@ class RPP_Snapshotter {
 			return;
 		}
 
-		// Query the hits table for the calendar-aligned 3-month window.
+		// Query the hits table for the calendar-aligned single-month window.
 		$rows = $wpdb->get_results(
 			$wpdb->prepare(
 				"SELECT post_id, SUM(hits) AS views
