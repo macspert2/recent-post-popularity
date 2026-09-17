@@ -28,6 +28,28 @@ class RPP_Activator {
 	}
 
 	/**
+	 * Bring an already-installed site's schema up to date.
+	 *
+	 * Runs on plugins_loaded and returns immediately once the stored version
+	 * matches, so the steady-state cost is one option read.
+	 *
+	 * Deliberately narrower than activate(): tables only. Rescheduling cron
+	 * here would undo a deliberate deactivation, and seed_meta() walks every
+	 * published post — neither belongs on a page load.
+	 *
+	 * @return void
+	 */
+	public static function maybe_upgrade() {
+		if ( get_option( RPP_VERSION_OPTION ) === RPP_VERSION ) {
+			return;
+		}
+
+		self::create_tables();
+
+		update_option( RPP_VERSION_OPTION, RPP_VERSION );
+	}
+
+	/**
 	 * Create the per-day hits table and the monthly snapshots table with dbDelta().
 	 *
 	 * @return void

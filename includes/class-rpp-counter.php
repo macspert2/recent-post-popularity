@@ -40,7 +40,7 @@ class RPP_Counter {
 			'rpp-beacon',
 			RPP_PLUGIN_URL . 'assets/js/beacon.js',
 			array(),
-			RPP_VERSION,
+			file_exists( RPP_PLUGIN_DIR . 'assets/js/beacon.js' ) ? filemtime( RPP_PLUGIN_DIR . 'assets/js/beacon.js' ) : RPP_VERSION,
 			true // In footer.
 		);
 

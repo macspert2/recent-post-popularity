@@ -64,6 +64,14 @@ register_deactivation_hook( __FILE__, array( 'RPP_Deactivator', 'deactivate' ) )
  * ---------------------------------------------------------------------------
  */
 
+// Schema upgrades for installs that already have the tables. create_tables()
+// only ever ran from register_activation_hook, so RPP_VERSION_OPTION was
+// written and never read back — a column or index added in a later version
+// would have reached new installs only. dbDelta is idempotent, so the upgrade
+// is simply "run it again", gated on the stored version so the usual cost is
+// one option read.
+add_action( 'plugins_loaded', array( 'RPP_Activator', 'maybe_upgrade' ) );
+
 // View counting: enqueue beacon + register REST endpoint.
 add_action( 'wp_enqueue_scripts', array( 'RPP_Counter', 'enqueue_beacon' ) );
 add_action( 'rest_api_init', array( 'RPP_Counter', 'register_routes' ) );
